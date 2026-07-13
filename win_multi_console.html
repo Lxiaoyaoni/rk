@@ -1,0 +1,580 @@
+﻿<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RK AOA Multi Device Console</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#292929;color:#e5e7eb;font-family:Arial,sans-serif;overflow:hidden}
+header{height:88px;display:flex;align-items:flex-start;justify-content:center;flex-direction:column;gap:6px;padding:8px 16px;border-bottom:1px solid #3a3a3a;background:#1f1f1f}
+h1{font-size:16px;margin:0;font-weight:700;white-space:nowrap}
+button{height:28px;border:1px solid #4b5563;border-radius:4px;background:#343434;color:#e5e7eb;padding:0 10px;font-size:12px;cursor:pointer}
+button:hover{background:#3f3f3f}
+button.primary{border-color:#0ea5e9;background:#075985}
+button.danger{border-color:#ef4444;background:#7f1d1d}
+button:disabled{opacity:.45;cursor:not-allowed}
+.toolbar,.settingsbar{display:flex;align-items:center;gap:8px;min-width:0}
+.keyword-input{height:28px;width:180px;border:1px solid #4b5563;border-radius:4px;background:#111827;color:#e5e7eb;padding:0 8px;font-size:12px}
+.setting-field{display:flex;align-items:center;gap:4px;font-size:12px;color:#cbd5e1;white-space:nowrap}
+.setting-field input,.setting-field select{height:26px;border:1px solid #4b5563;border-radius:4px;background:#111827;color:#e5e7eb;padding:0 6px;font-size:12px}
+.setting-field input[type=number]{width:64px}
+.setting-field input[type=checkbox]{width:15px;height:15px;accent-color:#0ea5e9}
+.settings-state{font-size:12px;color:#aab0bb;white-space:nowrap}
+.select-all{display:flex;align-items:center;gap:6px;font-size:12px;color:#cbd5e1;white-space:nowrap}
+.select-all input{width:16px;height:16px;accent-color:#0ea5e9}
+.sync-check:disabled,.select-all input:disabled{cursor:not-allowed}
+.sync-locked{opacity:.55}
+.summary{font-size:12px;color:#aab0bb;white-space:nowrap}
+.layout{height:calc(100vh - 88px);display:grid;grid-template-columns:180px 1fr;gap:28px;padding:8px 28px}
+.sidebar{display:flex;flex-direction:column;gap:16px;overflow:auto;padding:4px 4px 16px}
+.device-item{height:132px;border:2px solid #ef4444;border-radius:4px;background:#2f2f2f;color:#e5e7eb;display:grid;grid-template-rows:1fr auto;cursor:pointer;user-select:none;outline:none}
+.device-item.active{background:#383838;box-shadow:0 0 0 2px rgba(239,68,68,.25)}
+.device-title{position:relative;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
+.sync-check{position:absolute;left:8px;top:8px;width:18px;height:18px;accent-color:#0ea5e9}
+.device-meta{padding:8px;border-top:1px solid rgba(239,68,68,.45);font-size:11px;color:#b8bec8;line-height:1.35}
+.recover-btn{height:22px;margin-top:4px;padding:0 8px;border-color:#f59e0b;background:#78350f;color:#fde68a}
+.recover-btn[hidden]{display:none}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#f6c85f;margin-right:5px}
+.dot.ok{background:#68d391}.dot.bad{background:#f87171}
+.stage-wrap{min-width:0;display:grid;grid-template-rows:30px minmax(0,1fr) 44px;align-self:center;justify-self:center;width:min(440px,100%);height:calc(100vh - 104px)}
+.stage-bar{display:flex;align-items:center;justify-content:space-between;padding:0 10px;border:2px solid #0ea5e9;border-bottom:0;border-radius:4px 4px 0 0;background:#2f2f2f;font-size:12px}
+.stage{position:relative;min-height:0;border:2px solid #0ea5e9;background:#111;display:grid;place-items:center;touch-action:none;user-select:none;cursor:none;overflow:hidden}
+.stage.empty:after{content:"Select a device";color:#8b949e;font-size:15px}
+.stage canvas{display:block;max-width:100%;max-height:100%;width:auto;height:auto;background:#000;touch-action:none;object-fit:contain}
+.parking{display:none}
+.cursor{position:absolute;left:0;top:0;width:14px;height:14px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #111,0 1px 6px #000;pointer-events:none;transform:translate(-50%,-50%);display:none;z-index:5}
+.cursor:after{content:"";position:absolute;left:5px;top:5px;width:3px;height:3px;background:#fff;border-radius:50%}
+.log{font-size:12px;color:#aab0bb;padding:5px 10px;border:2px solid #0ea5e9;border-top:0;border-radius:0 0 4px 4px;background:#2f2f2f;white-space:pre-wrap;overflow:hidden}
+@media(max-width:760px){
+  body{overflow:auto}
+  header{height:auto;align-items:flex-start;flex-direction:column;padding:10px 12px}
+  .toolbar,.settingsbar{flex-wrap:wrap}
+  .layout{height:auto;grid-template-columns:1fr;padding:12px}
+  .sidebar{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));max-height:none}
+  .device-item{height:120px}
+  .stage-wrap{width:100%;height:min(760px,82vh)}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>RK AOA Multi Device Console</h1>
+  <div class="toolbar">
+    <label class="select-all"><input type="checkbox" id="selectAll">Select all</label>
+    <button class="primary" id="snapshotStart">Start snapshots</button>
+    <button class="danger" id="snapshotStop" disabled>Stop snapshots</button>
+    <input class="keyword-input" id="automationKeywords" value="" title="Multiple keywords: separate with comma, space, semicolon, or newline" placeholder="Enter keyword(s)">
+    <button class="primary" id="automationStart" disabled>Start automation</button>
+    <button class="danger" id="automationStop" disabled>Stop automation</button>
+    <div class="summary" id="summary">Starting...</div>
+  </div>
+  <div class="settingsbar">
+    <label class="setting-field">View(s)<input id="settingViewSeconds" type="number" min="1" max="60" step="0.5" value="6"></label>
+    <label class="setting-field">Swipe%<input id="settingSwipePercent" type="number" min="5" max="80" step="1" value="25"></label>
+    <label class="setting-field">OCR passes<input id="settingPageOcrPasses" type="number" min="1" max="5" step="1" value="2"></label>
+    <label class="setting-field">Wait(s)<input id="settingActionDelay" type="number" min="0.2" max="5" step="0.1" value="1"></label>
+    <label class="setting-field">Tap Y<input id="settingTapYOffset" type="number" min="-200" max="120" step="5" value="-45"></label>
+    <label class="setting-field">Detail<select id="settingDetailAction"><option value="wait">Wait only</option><option value="swipe_once">Swipe once</option></select></label>
+    <label class="setting-field"><input id="settingIgnoreAuthor" type="checkbox" checked>Ignore author</label>
+    <button id="automationApplySettings">Apply settings</button>
+    <span class="settings-state" id="automationSettingsState">settings not loaded</span>
+  </div>
+</header>
+<main class="layout">
+  <aside class="sidebar" id="deviceList"></aside>
+  <section class="stage-wrap">
+    <div class="stage-bar"><span id="stageTitle">No device selected</span><span id="stageState">waiting</span></div>
+    <div class="stage empty" id="stage"><div class="cursor" id="cursor"></div></div>
+    <div class="log" id="mainLog">Select a device from the left list.</div>
+  </section>
+</main>
+<div class="parking" id="parking"></div>
+<script>
+let devices=[],views=[],activeView=null,activeId=-1;
+let snapshotRunning=false,snapshotTimer=null,snapshotRunIds=[];
+let automationRunning=false,automationTimer=null,automationRunIds=[];
+let recoveringIds=new Set();
+const SNAPSHOT_INTERVAL_MS=60000;
+const AUTOMATION_REQUEST_POLL_MS=400;
+const OFFLINE_PACKET_AGE_MS=10000;
+const VIDEO_DECODE_STUCK_MS=5000;
+const list=document.getElementById('deviceList');
+const summary=document.getElementById('summary');
+const stage=document.getElementById('stage');
+const stageTitle=document.getElementById('stageTitle');
+const stageState=document.getElementById('stageState');
+const mainLog=document.getElementById('mainLog');
+const parking=document.getElementById('parking');
+const cursor=document.getElementById('cursor');
+const selectAll=document.getElementById('selectAll');
+const snapshotStart=document.getElementById('snapshotStart');
+const snapshotStop=document.getElementById('snapshotStop');
+const automationKeywords=document.getElementById('automationKeywords');
+const automationStart=document.getElementById('automationStart');
+const automationStop=document.getElementById('automationStop');
+const automationApplySettings=document.getElementById('automationApplySettings');
+const automationSettingsState=document.getElementById('automationSettingsState');
+const settingViewSeconds=document.getElementById('settingViewSeconds');
+const settingSwipePercent=document.getElementById('settingSwipePercent');
+const settingPageOcrPasses=document.getElementById('settingPageOcrPasses');
+const settingActionDelay=document.getElementById('settingActionDelay');
+const settingTapYOffset=document.getElementById('settingTapYOffset');
+const settingDetailAction=document.getElementById('settingDetailAction');
+const settingIgnoreAuthor=document.getElementById('settingIgnoreAuthor');
+
+function u32(dv,o){return dv.getUint32(o,false)}
+function u64(dv,o){return dv.getUint32(o,false)*4294967296+dv.getUint32(o+4,false)}
+function logMain(text){mainLog.textContent=text}
+function deviceCheckbox(id){return document.getElementById('sync'+id)}
+function checkedIds(){return views.map(v=>v&&deviceCheckbox(v.id)&&deviceCheckbox(v.id).checked?v.id:null).filter(v=>v!==null)}
+function runningAutomationSet(){return new Set(automationRunIds)}
+function checkedRunningIds(){const running=runningAutomationSet();return checkedIds().filter(id=>running.has(id))}
+function checkedIdleIds(){const running=runningAutomationSet();return checkedIds().filter(id=>!running.has(id))}
+function updateSelectAll(){const boxes=views.map(v=>v&&deviceCheckbox(v.id)).filter(Boolean);selectAll.checked=boxes.length>0&&boxes.every(cb=>cb.checked);selectAll.indeterminate=boxes.some(cb=>cb.checked)&&!selectAll.checked}
+function updateSummary(){const selected=checkedIds().length;summary.textContent='devices='+devices.length+' selected='+selected+' automation_devices='+automationRunIds.length+(snapshotRunning?' snapshots=on':' snapshots=off')+(automationRunning?' automation=on':' automation=off')}
+function updateSnapshotButtons(){snapshotStart.disabled=snapshotRunning;snapshotStop.disabled=!snapshotRunning;updateSummary()}
+function setSyncLocked(locked){
+  const label=selectAll.closest('label');
+  if(label)label.classList.toggle('sync-locked',false);
+  views.forEach(v=>{const cb=v&&deviceCheckbox(v.id);if(cb)cb.disabled=false});
+}
+function updateAutomationButtons(){
+  automationStart.disabled=checkedIdleIds().length===0||parseKeywords().length===0;
+  automationStop.disabled=checkedRunningIds().length===0;
+  setSyncLocked(false);
+  updateSummary();
+}
+
+function readAutomationSettings(){
+  return {
+    view_seconds:Number(settingViewSeconds.value||6),
+    swipe_percent:Number(settingSwipePercent.value||25),
+    page_ocr_passes:Number(settingPageOcrPasses.value||2),
+    action_delay:Number(settingActionDelay.value||1),
+    tap_y_offset:Number(settingTapYOffset.value||-45),
+    detail_action:settingDetailAction.value||'wait',
+    ignore_author_hits:!!settingIgnoreAuthor.checked
+  };
+}
+function writeAutomationSettings(settings){
+  if(!settings)return;
+  settingViewSeconds.value=settings.view_seconds;
+  settingSwipePercent.value=settings.swipe_percent;
+  settingPageOcrPasses.value=settings.page_ocr_passes;
+  settingActionDelay.value=settings.action_delay;
+  settingTapYOffset.value=settings.tap_y_offset;
+  settingDetailAction.value=settings.detail_action||'wait';
+  settingIgnoreAuthor.checked=!!settings.ignore_author_hits;
+}
+function markSettingsDirty(){automationSettingsState.textContent='settings changed, apply to use';automationSettingsState.style.color='#facc15'}
+async function loadAutomationSettings(){
+  const r=await fetch('/automation/settings');
+  if(!r.ok)return;
+  const data=await r.json();
+  writeAutomationSettings(data.settings);
+  automationSettingsState.textContent='settings applied';
+  automationSettingsState.style.color='#aab0bb';
+}
+async function applyAutomationSettings(){
+  automationApplySettings.disabled=true;
+  try{
+    const result=await postJson('/automation/settings',{settings:readAutomationSettings()});
+    writeAutomationSettings(result.settings);
+    automationSettingsState.textContent='settings applied';
+    automationSettingsState.style.color='#aab0bb';
+    logMain('automation settings applied: '+JSON.stringify(result.settings));
+  }catch(e){
+    automationSettingsState.textContent='settings apply failed';
+    automationSettingsState.style.color='#f87171';
+    logMain('automation settings apply failed: '+e.message);
+  }finally{
+    automationApplySettings.disabled=false;
+  }
+}
+
+async function loadStatus(){
+  const r=await fetch('/status');
+  const s=await r.json();
+  devices=s.devices||[];
+  devices.forEach(cfg=>{createDevice(cfg);updateDeviceStatus(cfg)});
+  updateSummary();
+  if(devices.length>0)selectDevice(devices[0].id);
+  loadAutomationSettings().catch(()=>{});
+  loadAutomationStatus().catch(()=>{});
+}
+
+async function refreshStatus(){
+  try{
+    const r=await fetch('/status');
+    if(!r.ok)return;
+    const s=await r.json();
+    devices=s.devices||[];
+    devices.forEach(cfg=>{createDevice(cfg);updateDeviceStatus(cfg)});
+    updateSummary();
+  }catch(_){}
+}
+
+async function loadAutomationStatus(){
+  const r=await fetch('/automation/status');
+  if(!r.ok)return;
+  const s=await r.json();
+  if(s.settings)writeAutomationSettings(s.settings);
+  const running=Object.entries(s.devices||{})
+    .filter(([,info])=>info&&info.running)
+    .map(([id])=>Number(id))
+    .filter(id=>Number.isFinite(id));
+  if(running.length===0)return;
+  automationRunIds=running;
+  automationRunning=running.length>0;
+  clearInterval(automationTimer);
+  automationTimer=setInterval(pollAutomationSnapshotRequests,AUTOMATION_REQUEST_POLL_MS);
+  updateAutomationButtons();
+  logMain('automation already running for device '+running.join(', '));
+}
+
+function createDevice(cfg){
+  if(views[cfg.id])return;
+  const item=document.createElement('div');
+  item.className='device-item';
+  item.id='devItem'+cfg.id;
+  item.tabIndex=0;
+  item.innerHTML='<div class="device-title"><input class="sync-check" type="checkbox" id="sync'+cfg.id+'">Device '+cfg.id+'</div><div class="device-meta"><span class="dot bad" id="dot'+cfg.id+'"></span><span id="miniState'+cfg.id+'">waiting</span><br>video '+cfg.video_port+'<br>control '+cfg.control_port+'<br><span id="snapState'+cfg.id+'">snapshot idle</span><br><button class="recover-btn" id="recover'+cfg.id+'" hidden>Recover</button></div>';
+  item.onclick=e=>{if(e.target&&(e.target.classList.contains('sync-check')||e.target.classList.contains('recover-btn')))return;selectDevice(cfg.id)};
+  item.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectDevice(cfg.id)}};
+  list.appendChild(item);
+  const cb=deviceCheckbox(cfg.id);
+  cb.onchange=()=>{updateSelectAll();updateAutomationButtons();updateSummary()};
+  const recover=document.getElementById('recover'+cfg.id);
+  recover.onclick=e=>{e.stopPropagation();recoverDevice(cfg.id)};
+  views[cfg.id]=new DeviceView(cfg.id,cfg);
+}
+
+function updateDeviceStatus(cfg){
+  const view=views[cfg.id];
+  if(!view)return;
+  view.cfg=Object.assign({},view.cfg,cfg);
+  view.watchDecodeFromStatus(cfg);
+  const age=Number(cfg.video_age_ms);
+  const stale=Number.isFinite(age)&&age>OFFLINE_PACKET_AGE_MS;
+  const offline=!cfg.connected||!cfg.last_packet_ms||stale;
+  const mini=document.getElementById('miniState'+cfg.id);
+  const dot=document.getElementById('dot'+cfg.id);
+  const recover=document.getElementById('recover'+cfg.id);
+  if(mini&&!view.online)mini.textContent=recoveringIds.has(cfg.id)?'recovering':(offline?'offline':'waiting');
+  if(dot&&!view.online)dot.className='dot '+(!offline?'ok':'bad');
+  if(recover){
+    recover.hidden=!offline;
+    recover.disabled=recoveringIds.has(cfg.id);
+    recover.textContent=recoveringIds.has(cfg.id)?'Recovering':'Recover';
+  }
+}
+
+function selectDevice(id){
+  const view=views[id];
+  if(!view)return;
+  if(activeView&&activeView.id!==id){
+    activeView.setStreamMode('idle');
+    activeView.closeVideo();
+    if(activeView.canvas.parentNode===stage)parking.appendChild(activeView.canvas);
+  }
+  activeView=view;
+  activeId=id;
+  document.querySelectorAll('.device-item').forEach(el=>el.classList.remove('active'));
+  const item=document.getElementById('devItem'+id);
+  if(item)item.classList.add('active');
+  stage.classList.remove('empty');
+  stage.appendChild(view.canvas);
+  stage.appendChild(cursor);
+  view.fitCanvas();
+  cursor.style.display='none';
+  stageTitle.textContent='Device '+id;
+  stageState.textContent=view.online?'online':'waiting';
+  mainLog.textContent=view.lastLog||'video '+view.cfg.video_port+' | control '+view.cfg.control_port;
+  view.setStreamMode('active');
+  view.connectVideo();
+}
+
+class DeviceView{
+  constructor(id,cfg){
+    this.id=id;this.cfg=cfg;this.W=720;this.H=1568;this.decoder=null;this.decoderReady=false;this.pending=[];
+    this.frames=0;this.fps=0;this.lastFps=performance.now();this.lastDecoderReset=0;this.wsReady=false;this.videoReady=false;
+    this.online=false;this.active=false;this.pointerId=null;this.down=null;this.drag=false;this.downSent=false;this.lastMove=0;this.timer=null;
+    this.lastLog='';this.vws=null;this.videoReconnect=null;this.frameSerial=0;this.lastFrameAt=0;this.lastServerPackets=0;this.lastServerPacketAt=0;this.lastDecodeWatchReset=0;this.snapshotPending=false;this.snapshotBusy=false;this.snapshotReadyAt=0;this.snapshotStartFrame=0;this.snapshotFallbackTimer=null;this.snapshotTimeoutTimer=null;this.pendingStreamMode=null;
+    this.canvas=document.createElement('canvas');this.canvas.width=this.W;this.canvas.height=this.H;this.canvas.id='canvas'+id;
+    this.ctx=this.canvas.getContext('2d');parking.appendChild(this.canvas);this.connectControl();
+  }
+  log(s){this.lastLog=s;if(activeId===this.id)mainLog.textContent=s}
+  snapState(s){const el=document.getElementById('snapState'+this.id);if(el)el.textContent=s}
+  state(s,ok){this.online=ok;const mini=document.getElementById('miniState'+this.id),dot=document.getElementById('dot'+this.id);if(mini)mini.textContent=s;if(dot)dot.className='dot '+(ok?'ok':'bad');if(activeId===this.id)stageState.textContent=s}
+  setSize(w,h){if(w&&h&&(w!==this.W||h!==this.H)){this.W=w;this.H=h;this.canvas.width=w;this.canvas.height=h}this.fitCanvas()}
+  fitCanvas(){const sw=stage.clientWidth||420,sh=stage.clientHeight||800;const scale=Math.min(sw/this.W,sh/this.H);this.canvas.style.width=Math.max(1,Math.floor(this.W*scale))+'px';this.canvas.style.height=Math.max(1,Math.floor(this.H*scale))+'px'}
+  async makeDecoder(){
+    if(!('VideoDecoder'in window)){this.log('WebCodecs required: use Chrome or Edge');return null}
+    const codecs=['avc1.640028','avc1.640032','avc1.64001f','avc1.4D4028','avc1.42E01E'];
+    for(const codec of codecs){
+      for(const cfg of [{codec,codedWidth:this.W,codedHeight:this.H,optimizeForLatency:true,avc:{format:'annexb'}},{codec,codedWidth:this.W,codedHeight:this.H,optimizeForLatency:true}]){
+        try{
+          if(VideoDecoder.isConfigSupported){const r=await VideoDecoder.isConfigSupported(cfg);if(!r.supported)continue}
+          const d=new VideoDecoder({output:f=>{try{this.ctx.drawImage(f,0,0,this.W,this.H)}finally{f.close()}this.frameSerial++;const now=performance.now();this.lastFrameAt=now;if(this.snapshotPending&&now>=this.snapshotReadyAt&&this.frameSerial>this.snapshotStartFrame)this.finishSnapshot();this.frames++;if(now-this.lastFps>=1000){this.fps=this.frames;this.frames=0;this.lastFps=now}},error:e=>this.log('decoder error: '+e.message)});
+          d.configure(cfg);return d;
+        }catch(e){}
+      }
+    }
+    this.log('H.264 decoder config failed');return null;
+  }
+  async ensureDecoder(){if(this.decoderReady&&this.decoder)return this.decoder;this.decoder=await this.makeDecoder();this.decoderReady=!!this.decoder;if(this.decoderReady){const q=this.pending;this.pending=[];q.forEach(b=>this.decodePacket(b))}return this.decoder}
+  decodePacket(buf){
+    if(buf.byteLength<28)return;
+    const dv=new DataView(buf);
+    if(String.fromCharCode(dv.getUint8(0),dv.getUint8(1),dv.getUint8(2),dv.getUint8(3))!=='AVC1')return;
+    const w=u32(dv,4),h=u32(dv,8),flags=u32(dv,12);let pts=u64(dv,16);const size=u32(dv,24);
+    if(28+size>buf.byteLength)return;
+    if((flags&2)&&!(flags&1))return;
+    this.setSize(w,h);
+    if(!this.decoderReady||!this.decoder){this.pending.push(buf);this.ensureDecoder();return}
+    const data=new Uint8Array(buf,28,size);
+    const type=(flags&1)?'key':'delta';
+    if(flags&2)pts=performance.now()*1000;
+    try{
+      if(this.decoder.decodeQueueSize>8){
+        const now=performance.now();
+        if(now-this.lastDecoderReset>1000){this.lastDecoderReset=now;try{this.decoder.close()}catch(_){}this.decoder=null;this.decoderReady=false;this.pending=[];this.log('decoder reset: queue stuck')}
+        return;
+      }
+      this.decoder.decode(new EncodedVideoChunk({type,timestamp:pts||Math.round(performance.now()*1000),data}));
+      this.state('online',true);
+      this.log('video '+this.W+'x'+this.H+' fps='+this.fps+' queue='+this.decoder.decodeQueueSize+' control='+(this.wsReady?'ok':'wait'));
+    }catch(e){this.log('decode error: '+e.message)}
+  }
+  requestSnapshot(reason){
+    if(this.snapshotBusy)return false;
+    this.snapshotBusy=true;this.snapshotPending=true;this.snapshotReadyAt=performance.now()+1000;this.snapshotStartFrame=this.frameSerial;this.snapState('snapshot '+reason+' waiting fresh frame');
+    this.setStreamMode('active');this.connectVideo();
+    clearTimeout(this.snapshotFallbackTimer);
+    clearTimeout(this.snapshotTimeoutTimer);
+    this.snapshotFallbackTimer=setTimeout(()=>{if(this.snapshotPending)this.finishSnapshot()},2500);
+    this.snapshotTimeoutTimer=setTimeout(()=>{if(this.snapshotPending){this.snapState('snapshot timeout, saving current frame');this.finishSnapshot()}},12000);
+    return true;
+  }
+  finishSnapshot(){
+    if(!this.snapshotPending)return;
+    this.snapshotPending=false;
+    clearTimeout(this.snapshotFallbackTimer);
+    clearTimeout(this.snapshotTimeoutTimer);
+    this.canvas.toBlob(blob=>{
+      if(!blob){this.snapshotBusy=false;this.snapState('snapshot failed');if(activeId!==this.id){this.closeVideo();this.setStreamMode('idle')}return}
+      fetch('/snapshot/'+this.id,{method:'POST',headers:{'Content-Type':'image/png'},body:blob})
+        .then(r=>r.ok?this.snapState('snapshot saved '+new Date().toLocaleTimeString()):this.snapState('snapshot save failed'))
+        .catch(()=>this.snapState('snapshot save failed'))
+        .finally(()=>{this.snapshotBusy=false;if(activeId!==this.id){this.closeVideo();this.setStreamMode('idle')}});
+    },'image/png');
+  }
+  connectVideo(){
+    if(this.videoReady||this.vws)return;
+    const vws=new WebSocket('ws://'+location.host+'/video/'+this.id);
+    this.vws=vws;vws.binaryType='arraybuffer';
+    vws.onopen=()=>{this.videoReady=true;this.log('video ws connected, waiting RK stream...')};
+    vws.onmessage=e=>{if(e.data instanceof ArrayBuffer)this.decodePacket(e.data)};
+    vws.onclose=()=>{this.videoReady=false;this.vws=null;this.state('waiting',false);this.decoderReady=false;try{this.decoder&&this.decoder.close()}catch(_){}this.decoder=null;if(activeId===this.id){clearTimeout(this.videoReconnect);this.videoReconnect=setTimeout(()=>this.connectVideo(),1000)}};
+    vws.onerror=()=>this.log('video ws error');
+  }
+  closeVideo(){clearTimeout(this.videoReconnect);this.videoReconnect=null;if(this.vws){const ws=this.vws;this.vws=null;try{ws.onclose=null;ws.close()}catch(_){}}this.videoReady=false;this.decoderReady=false;try{this.decoder&&this.decoder.close()}catch(_){}this.decoder=null;this.pending=[]}
+  resetVideoPipeline(reason){
+    const now=performance.now();
+    if(now-this.lastDecodeWatchReset<3000)return;
+    this.lastDecodeWatchReset=now;
+    this.log('video reset: '+reason);
+    this.closeVideo();
+    this.setStreamMode('active');
+    setTimeout(()=>this.connectVideo(),300);
+  }
+  watchDecodeFromStatus(cfg){
+    const packets=Number(cfg.packets||0);
+    const now=performance.now();
+    if(packets>this.lastServerPackets){
+      this.lastServerPackets=packets;
+      this.lastServerPacketAt=now;
+    }
+    if(activeId!==this.id)return;
+    if(!this.videoReady)return;
+    if(!this.lastServerPacketAt)return;
+    const noFrame=!this.lastFrameAt||now-this.lastFrameAt>VIDEO_DECODE_STUCK_MS;
+    const serverFresh=now-this.lastServerPacketAt<VIDEO_DECODE_STUCK_MS;
+    if(serverFresh&&noFrame)this.resetVideoPipeline('server packets without decoded frames');
+  }
+  connectControl(){
+    this.ws=new WebSocket('ws://'+location.host+'/ws/'+this.id);
+    this.ws.onopen=()=>{this.wsReady=true;this.log('control connected');const mode=this.pendingStreamMode||(activeId===this.id?'active':'idle');this.pendingStreamMode=null;this.setStreamMode(mode)};
+    this.ws.onmessage=e=>{try{const r=JSON.parse(e.data);if(r.status==='failed')this.log('control failed: '+r.message)}catch(_){}};
+    this.ws.onclose=()=>{this.wsReady=false;this.log('control disconnected');setTimeout(()=>this.connectControl(),1000)};
+    this.ws.onerror=()=>{this.wsReady=false;this.log('control ws error')};
+  }
+  pt(e){const r=this.canvas.getBoundingClientRect();return{x:Math.max(0,Math.min(this.W-1,Math.round((e.clientX-r.left)*this.W/r.width))),y:Math.max(0,Math.min(this.H-1,Math.round((e.clientY-r.top)*this.H/r.height)))}}
+  send(a){if(!this.wsReady||!this.ws||this.ws.readyState!==1){this.log('control not ready');return false}this.ws.send(JSON.stringify(a));return true}
+  setStreamMode(mode){if(!this.send({type:'stream',mode}))this.pendingStreamMode=mode}
+  dist(a,b){const x=a.x-b.x,y=a.y-b.y;return Math.sqrt(x*x+y*y)}
+}
+
+function route(){return activeView}
+function controlTargets(){
+  const ids=new Set();
+  if(activeView)ids.add(activeView.id);
+  if(!automationRunning)checkedIds().forEach(id=>ids.add(id));
+  return Array.from(ids).map(id=>views[id]).filter(Boolean);
+}
+function sendToTargets(action){controlTargets().forEach(v=>v.send(Object.assign({},action)))}
+function startDragTargets(){controlTargets().forEach(v=>{if(v.active&&v.down&&!v.downSent){v.drag=true;v.downSent=true;v.send({type:'down',x:v.down.x,y:v.down.y,width:v.W,height:v.H})}})}
+function targetPoint(v,base,source){if(!source||source.W<=1||source.H<=1)return{x:base.x,y:base.y};return{x:Math.max(0,Math.min(v.W-1,Math.round(base.x*(v.W-1)/(source.W-1)))),y:Math.max(0,Math.min(v.H-1,Math.round(base.y*(v.H-1)/(source.H-1))))}}
+
+function captureSnapshots(ids,reason){
+  const targets=ids.map(id=>views[id]).filter(Boolean);
+  if(targets.length===0){logMain('Select at least one device before taking snapshots.');return false}
+  targets.forEach(v=>v.requestSnapshot(reason));
+  logMain('snapshot '+reason+': device '+targets.map(v=>v.id).join(', '));
+  return true;
+}
+function startSnapshots(){
+  const ids=checkedIds();
+  if(ids.length===0){logMain('Select at least one device before starting snapshots.');return}
+  snapshotRunIds=ids.slice();
+  snapshotRunning=true;
+  updateSnapshotButtons();
+  captureSnapshots(snapshotRunIds,'start');
+  clearInterval(snapshotTimer);
+  snapshotTimer=setInterval(()=>captureSnapshots(snapshotRunIds,'scheduled'),SNAPSHOT_INTERVAL_MS);
+}
+function stopSnapshots(){
+  const stopIds=checkedIds();
+  if(stopIds.length===0){logMain('Keep at least one device selected, then click Stop snapshots.');return}
+  captureSnapshots(stopIds,'stop');
+  snapshotRunning=false;
+  snapshotRunIds=[];
+  clearInterval(snapshotTimer);
+  snapshotTimer=null;
+  updateSnapshotButtons();
+}
+
+function parseKeywords(){
+  const seen=new Set();
+  const raw=automationKeywords.value.split(/[\s,，、;；]+/).map(s=>s.trim()).filter(Boolean);
+  return raw.filter(s=>{if(seen.has(s))return false;seen.add(s);return true});
+}async function postJson(path,payload){
+  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(!r.ok)throw new Error(path+' failed: '+r.status);
+  return await r.json();
+}
+async function recoverDevice(id){
+  if(recoveringIds.has(id))return;
+  recoveringIds.add(id);
+  const btn=document.getElementById('recover'+id);
+  if(btn){btn.disabled=true;btn.textContent='Recovering'}
+  const view=views[id];
+  if(view)view.resetVideoPipeline('recover requested');
+  logMain('recover device '+id+': restarting RK bridge, then tap Start screen stream on phone if needed.');
+  try{
+    const result=await postJson('/device/recover',{device:id});
+    logMain('recover device '+id+': '+JSON.stringify(result));
+  }catch(e){
+    logMain('recover device '+id+' failed: '+e.message);
+  }finally{
+    setTimeout(()=>{recoveringIds.delete(id);refreshStatus()},3000);
+  }
+}
+async function startAutomation(){
+  const ids=checkedIdleIds();
+  if(ids.length===0){logMain('Select at least one device before starting automation.');return}
+  const keywords=parseKeywords();
+  if(keywords.length===0){logMain('Enter at least one keyword before starting automation.');return}
+  const running=runningAutomationSet();
+  const nextRunIds=[...new Set(automationRunIds.concat(ids))];
+  automationRunIds=nextRunIds;
+  automationRunning=automationRunIds.length>0;
+  updateAutomationButtons();
+  logMain('automation start requested for device '+ids.join(', ')+'; running devices will not be started again.');
+  captureSnapshots(ids,'automation');
+  clearInterval(automationTimer);
+  automationTimer=setInterval(pollAutomationSnapshotRequests,AUTOMATION_REQUEST_POLL_MS);
+  try{
+    const result=await postJson('/automation/start',{devices:ids,keywords,scan_interval:1.0});
+    automationRunIds=[...new Set(automationRunIds.concat(result.started||[], result.already_running||[]))].map(Number).filter(Number.isFinite);
+    automationRunning=automationRunIds.length>0;
+    updateAutomationButtons();
+    logMain('automation started: '+JSON.stringify(result));
+  }catch(e){
+    automationRunIds=automationRunIds.filter(id=>!ids.includes(id));
+    automationRunning=automationRunIds.length>0;
+    clearInterval(automationTimer);
+    automationTimer=automationRunning?setInterval(pollAutomationSnapshotRequests,AUTOMATION_REQUEST_POLL_MS):null;
+    updateAutomationButtons();
+    logMain('automation start failed: '+e.message);
+  }
+}
+async function stopAutomation(){
+  const ids=checkedRunningIds();
+  if(ids.length===0){logMain('Select at least one running automation device before stopping.');return}
+  updateAutomationButtons();
+  try{
+    const result=await postJson('/automation/stop',{devices:ids});
+    const stopped=new Set((result.stopped||[]).map(Number).filter(Number.isFinite));
+    automationRunIds=automationRunIds.filter(id=>!stopped.has(id));
+    automationRunning=automationRunIds.length>0;
+    clearInterval(automationTimer);
+    automationTimer=automationRunning?setInterval(pollAutomationSnapshotRequests,AUTOMATION_REQUEST_POLL_MS):null;
+    updateAutomationButtons();
+    logMain('automation stopped: '+JSON.stringify(result));
+  }catch(e){
+    logMain('automation stop failed: '+e.message);
+  }
+}
+
+async function pollAutomationSnapshotRequests(){
+  if(!automationRunning)return;
+  try{
+    const r=await fetch('/automation/snapshot_requests');
+    if(!r.ok)return;
+    const s=await r.json();
+    const requests=Array.isArray(s.requests)?s.requests:[];
+    if(requests.length===0)return;
+    const ids=[...new Set(requests.map(row=>Number(row.id)).filter(id=>Number.isFinite(id)))];
+    const reason=requests.map(row=>row.reason).filter(Boolean).join(',');
+    captureSnapshots(ids,reason||'automation');
+  }catch(_){}
+}
+
+function keyUsage(e){const c=e.code;if(/^Key[A-Z]$/.test(c))return 4+c.charCodeAt(3)-65;if(/^Digit[1-9]$/.test(c))return 0x1e+Number(c[5])-1;if(c==='Digit0')return 0x27;const m={Enter:0x28,Escape:0x29,Backspace:0x2a,Tab:0x2b,Space:0x2c,Minus:0x2d,Equal:0x2e,BracketLeft:0x2f,BracketRight:0x30,Backslash:0x31,Semicolon:0x33,Quote:0x34,Backquote:0x35,Comma:0x36,Period:0x37,Slash:0x38,CapsLock:0x39,PrintScreen:0x46,ScrollLock:0x47,Pause:0x48,Insert:0x49,Home:0x4a,PageUp:0x4b,Delete:0x4c,End:0x4d,PageDown:0x4e,ArrowRight:0x4f,ArrowLeft:0x50,ArrowDown:0x51,ArrowUp:0x52};if(/^F([1-9]|1[0-2])$/.test(c))return 0x3a+Number(c.slice(1))-1;return m[c]||0}
+function keyModifier(e){let m=0;if(e.ctrlKey)m|=1;if(e.shiftKey)m|=2;if(e.altKey)m|=4;if(e.metaKey)m|=8;return m}
+function isTextInputTarget(el){return el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.isContentEditable)}
+function sendKey(e,action){const v=route();if(isTextInputTarget(e.target)||!v||e.ctrlKey||e.altKey||e.metaKey)return;const usage=keyUsage(e);if(!usage)return;if(action==='down'&&e.repeat)return;e.preventDefault();sendToTargets({type:'key',action,usage,modifier:keyModifier(e)})}
+function moveCursor(e){const r=stage.getBoundingClientRect();cursor.style.left=(e.clientX-r.left)+'px';cursor.style.top=(e.clientY-r.top)+'px';cursor.style.display='block'}
+
+selectAll.onchange=()=>{views.forEach(v=>{const cb=v&&deviceCheckbox(v.id);if(cb)cb.checked=selectAll.checked});updateSelectAll();updateAutomationButtons();updateSummary()};
+snapshotStart.onclick=startSnapshots;
+snapshotStop.onclick=stopSnapshots;
+automationStart.onclick=startAutomation;
+automationStop.onclick=stopAutomation;
+automationApplySettings.onclick=applyAutomationSettings;
+automationKeywords.onclick=e=>e.stopPropagation();
+automationKeywords.onkeydown=e=>e.stopPropagation();
+automationKeywords.oninput=updateAutomationButtons;
+[settingViewSeconds,settingSwipePercent,settingPageOcrPasses,settingActionDelay,settingTapYOffset,settingDetailAction,settingIgnoreAuthor].forEach(el=>{
+  el.oninput=markSettingsDirty;
+  el.onchange=markSettingsDirty;
+});
+stage.oncontextmenu=e=>e.preventDefault();
+stage.onpointerenter=e=>{if(route())moveCursor(e)};
+stage.onpointerleave=e=>{const v=route();if(v&&!v.active)cursor.style.display='none'};
+stage.onpointerdown=e=>{const v=route();if(!v||e.button!==0)return;e.preventDefault();moveCursor(e);stage.setPointerCapture(e.pointerId);const p=v.pt(e);const targets=controlTargets();targets.forEach(t=>{const tp=targetPoint(t,p,v);t.send({type:'cursor',x:tp.x,y:tp.y,width:t.W,height:t.H});t.active=true;t.pointerId=e.pointerId;t.down=tp;t.drag=false;t.downSent=false});v.timer=setTimeout(()=>startDragTargets(),450)};
+stage.onpointermove=e=>{const v=route();if(!v)return;moveCursor(e);const p=v.pt(e);if(!v.active)return;if(v.pointerId!==e.pointerId)return;e.preventDefault();if(!v.drag&&v.dist(p,v.down)>8){clearTimeout(v.timer);startDragTargets()}if(v.drag&&Date.now()-v.lastMove>16){v.lastMove=Date.now();controlTargets().forEach(t=>{if(!t.active||t.pointerId!==e.pointerId)return;const tp=targetPoint(t,p,v);if(t.drag)t.send({type:'move',x:tp.x,y:tp.y,width:t.W,height:t.H})})}};
+stage.onpointerup=e=>{const v=route();if(!v||!v.active||v.pointerId!==e.pointerId)return;e.preventDefault();clearTimeout(v.timer);const p=v.pt(e);controlTargets().forEach(t=>{if(!t.active||t.pointerId!==e.pointerId)return;const tp=targetPoint(t,p,v);if(t.drag||t.downSent)t.send({type:'up',x:tp.x,y:tp.y,width:t.W,height:t.H});else t.send({type:'tap',x:tp.x,y:tp.y,width:t.W,height:t.H});t.active=false;t.pointerId=null;t.down=null;t.drag=false;t.downSent=false})};
+window.addEventListener('keydown',e=>sendKey(e,'down'));
+window.addEventListener('keyup',e=>sendKey(e,'up'));
+window.addEventListener('beforeunload',()=>{views.forEach(v=>{if(v)v.setStreamMode('idle')})});
+window.onresize=()=>{if(activeView)activeView.fitCanvas()};
+setInterval(()=>{if(activeView){activeView.setStreamMode('active');activeView.connectVideo()}},2000);
+setInterval(refreshStatus,2000);
+loadStatus().catch(e=>{summary.textContent='status error: '+e.message});
+</script>
+</body>
+</html>
+
